@@ -1,65 +1,82 @@
 ---
-name: headers-first
-description: Structure prose around a header list that reads as the argument itself. Use when drafting, outlining, or restructuring an essay, blog post, report, memo, or any piece meant to be read straight through.
+name: readable-writing
+description: Write so a distracted reader can follow on one pass, and recover after looking away.
 disable-model-invocation: true
 ---
 
-# Start with the headers
+# Readable writing
 
-Applies to writing that makes a case. Material readers navigate by
-lookup rather than read through — API docs, reference tables,
-troubleshooting lists — is exempt; those are organized by topic on
-purpose.
+Write so a distracted reader can follow on one pass, and recover
+after looking away.
+
+## Start with the headers
 
 Before writing any prose, draft the header list. Then read the list
-straight through, top to bottom, as if it were a paragraph. It
-should hold together as a summary of the whole piece — not a list
-of what each section covers.
+straight through — it should be a summary of the whole piece.
 
-Write claims, not topics: "Rewriting the scheduler cost us two
-weeks," not "The scheduler rewrite."
+Write claims, not topics: "Preference RL rewards confidence," not
+"Preference RL." If the list reads as a table of contents, or the
+lines don't connect, the argument isn't there yet. Fix it here,
+before writing.
 
-## Three checks on the list
+Three checks on the list:
 
-**Does each line follow from the one above it?** If you'd need to
-add "and separately" or "also" to move between two headers, the
-argument has a gap. If a header only makes sense after reading its
-section, rewrite it.
+1. **Each line follows from the one above.** If you'd need "and
+   separately" to get between two headers, the argument has a gap.
+2. **Each header says what its section does for the argument.**
+   "Talent doesn't explain the gains" beats "The two showcase teams
+   had caveats" — both true, only one tells the reader why the
+   section is there.
+3. **The list covers the piece.** Every point you mean to make
+   appears, and every line has material behind it. A header you
+   can't fill is a claim you want to be true, not one you're ready
+   to make.
 
-**Does each header say what its section does for the argument?** A
-section that rules out an explanation should say so, not describe
-its contents. "Talent doesn't explain the gains" beats "The two
-showcase teams had caveats" — both are true, but only the first
-tells the reader why the section is there.
+One header per claim. If a section won't take a claim-shaped
+header, that's rarely a naming problem — it usually means the
+section has no job in the argument. Cut it, or merge it into the
+section it actually supports.
 
-**Does the list account for the whole piece?** Every point you mean
-to make should appear somewhere on it. And every line should have
-real material behind it — a header you can't fill is a claim you
-want to be true, not one you're ready to make. Cut it or go find
-the evidence.
+Then write the sections. The header already made the claim, so open
+each one by supporting or extending it, not repeating it.
 
-## When a section won't take a claim
+When the draft is done, read the list once more against what the
+sections became. A section that outgrew its header leaves the
+header a promise the piece doesn't keep.
 
-If you can't write a claim-shaped header for a section, that's
-rarely a naming problem. It usually means the section has no job in
-the argument. Cut it, or merge it into the section whose claim it
-actually supports. The resistance is the most useful signal this
-method gives you — don't paper over it with a vaguer header.
+(Reference and how-to material is exempt — readers navigate those by
+topic.)
 
-## How many headers
+## Two rules for the prose
 
-One per claim the argument needs. If two adjacent headers make the
-same move, they're one section. If a single header covers two
-claims, the list is hiding a step — split it. Nest only when a
-section's sub-parts are themselves steps in the argument; two
-levels is almost always enough.
+**Verbs over abstract nouns.** "Implementing the retry logic slowed
+startup," not "the implementation caused degradation." Verbs force
+you to name the object; nouns let you hide it. Use the noun only
+when the process itself is the topic, or when the previous sentence
+already pinned it down.
 
-## Fix the list before writing, and again after
+**Every reference is visible.** No bare "this," "that," or "it" as a
+subject — attach a noun. Name a thing before any pronoun for it.
+Re-name it after a paragraph break; pronouns don't survive the gap.
 
-Rewriting headers is cheap; rewriting sections is not. So settle
-the list first.
+## Shape
 
-But sections drift as you draft. When the piece is done, read the
-header list straight through one more time and check it against
-what the sections actually became. If a section outgrew its header,
-the header is now a promise the piece doesn't keep.
+Lead with the point. Short paragraphs, one idea each.
+
+Don't compress so hard the reader has to get it right the first
+time. Some restatement helps someone who lapsed — that isn't padding.
+
+## Before finishing
+
+Reread and fix:
+
+1. Every "this"/"that"/"it" — is there a noun?
+2. Every abstract noun — of what, by whom? If unanswerable, make it
+   a verb.
+3. Every paragraph — is the claim in the first sentence?
+
+Fix silently. Don't report the audit.
+
+## Scope
+
+Prose with an argument. Code, data, and quoted material are exempt.
