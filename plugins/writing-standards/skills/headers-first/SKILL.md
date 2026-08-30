@@ -1,6 +1,7 @@
 ---
-name: ai-writing-skill
+name: headers-first
 description: Structure prose around a header list that reads as the argument itself. Use when drafting, outlining, or restructuring an essay, blog post, report, memo, or any piece meant to be read straight through.
+disable-model-invocation: true
 ---
 
 # Start with the headers
