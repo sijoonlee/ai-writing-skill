@@ -87,6 +87,27 @@ those paths described are gone. This is the version you cannot get out of.
 Same mechanism, two tiers, decided entirely by whether someone once wrote a diff to disk to
 make debugging easier.
 
+## Neither half is expendable, so which one do you free?
+
+The asymmetry test in the main document — spend the reversible value to buy the irreversible
+one — has nothing to say here, because both sides are Tier 1. Its fallback is three questions,
+and on this case all three point the same way.
+
+**Can either half be made smaller, or later?** The schema cannot: rows are accumulating now.
+The contract can. A fixed set of named operations is a far smaller surface than *any path into
+the document*, and it stops growing when the model grows. Shrink the contract.
+
+**Which failure surfaces sooner?** Freezing the contract means a client eventually asks for
+something the server no longer offers — a rejected request, reported the same day. Freezing the
+schema means modelling mistakes become permanent and their symptom is rows that look fine.
+Between two permanent mistakes, take the loud one: let the contract be the rigid half.
+
+**Which has more consumers you cannot reach?** The schema has one, your server. The contract
+has every client version ever shipped. So the contract is the thing that must change least —
+and paths change every time the model does, while intent does not.
+
+Fix the contract, free the schema. That is what commands are.
+
 ## Commands instead of diffs
 
 Send operations named by intent rather than by location: `approve`, `add-address`,
