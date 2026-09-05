@@ -104,8 +104,9 @@ a Tier 2 rewrite you should be able to afford, means reshaping tables under live
 a Tier 1 cost you can't. The reversible decision has been promoted into the irreversible tier
 without anyone deciding to promote it.
 
-That is the actual content of the layering argument — not purity, but keeping the expendable
-layer expendable. It is what "hexagonal" and "ports and adapters" are for: the domain declares
+That is the actual content of the layering argument. Not the principle usually called
+*purity* — that a domain should never know the database exists — but the practical business of
+keeping the expendable layer expendable. It is what "hexagonal" and "ports and adapters" are for: the domain declares
 what it needs from storage, and the framework implements that, rather than the framework
 defining what the domain is.
 
