@@ -29,8 +29,8 @@ The proposed approach:
 you cannot recover, because the visits already happened and nobody will make them again. There
 is no backfill.
 
-Run the deletion test in its verb form — *if we deleted this, could we rebuild it, and from
-what?* Every number on the dashboard is derived, and the only thing they are derived from is
+Run the deletion test in the form for computed things — *if we deleted this, could we rebuild
+it, and from what?* Every number on the dashboard is derived, and the only thing they are derived from is
 this table. So the two values that decide it are **Fidelity**, because the model has to match
 how visits actually happen, and **Re-derivability**, because nothing here can be rebuilt once
 the rule changes.
@@ -55,8 +55,8 @@ would be permanently impossible.
 
 **The date.** `YYYY-MM-DD` in whose timezone? A decision was made, possibly by accident, and
 it is not re-derivable. Hour-of-day, business days in another region, "the first 24 hours after
-launch" — all unanswerable for any data already collected. *A day is a verb whose output was
-stored as the only fact.*
+launch" — all unanswerable for any data already collected. *A day is a computation whose output
+was stored as the only fact.*
 
 **The attribution.** Overwriting the campaign cookie silently implements **last-touch
 attribution with an infinite window**. Nobody chose that; it fell out of "put the campaign id
@@ -68,11 +68,11 @@ only one of them means a campaign drove the visit.
 ### The structural problem
 
 **A rollup is being stored as if it were the source of truth**, with policy baked into it. In
-the vocabulary of the main document: the verb's output is the only noun. The fix is to separate
-them.
+the vocabulary of the main document: the computed result is the only record. The fix is to
+separate them.
 
 ```
-visit_events                          ← append-only, the truth (Tier 1 noun)
+visit_events                          ← append-only, the truth (Tier 1: recorded)
   event_id
   visitor_id
   occurred_at      timestamptz        ← instant, not date
@@ -92,9 +92,10 @@ campaign_daily_uniques                ← derived, recomputable
 The original table survives as the middle layer, because range uniques genuinely need distinct
 tuples rather than counts. It just stops being the thing that can never be rebuilt.
 
-The event log is the **Tier 1 noun**, fitted to the domain. The rollups are **Tier 3 verbs** —
-expendable, so the timezone, the attribution rule and the bot filter can all change and history
-recomputes behind them. In the original design, none of those are recoverable.
+The event log is the **Tier 1 record**, fitted to the domain. The rollups are **Tier 3
+computations** — expendable, so the timezone, the attribution rule and the bot filter can all
+change and history recomputes behind them. In the original design, none of those are
+recoverable.
 
 > **Chose** an append-only event log underneath the existing day table
 > **For** Re-derivability — the timezone, the attribution rule and the bot filter become

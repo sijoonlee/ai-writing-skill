@@ -6,8 +6,8 @@ Most of what engineers argue about can be undone in a week. The decisions that o
 — the data model, the tenancy shape, who owns which fact — get made silently, by whoever writes
 the first migration. So this document starts by sorting decisions by what it costs to be wrong,
 and says which ones have earned a real conversation. Then it throws out the arguments that were
-never trades at all — the ones where somebody had already drawn a line and the only question was
-whether you cleared it. What survives needs a vocabulary, and today every developer has a
+never trades at all — the ones where a line had already been drawn, by somebody or by arithmetic,
+and the only question was whether you cleared it. What survives needs a vocabulary, and today every developer has a
 different word for *because* — cleaner, simpler, more maintainable, more pragmatic — so no two
 people mean quite the same thing and nobody can read back what anyone actually valued. Fourteen
 named values fix that, used in a sentence with two halves: what you bought, and what you paid
@@ -32,24 +32,21 @@ test** instead — referred to by that name for the rest of this document:
 "A module" means you're fine. "A table with two years of rows in it, and the three services
 that read from it" means you have located the part of the design you only get one attempt at.
 
-## Nouns and verbs answer that question differently
+## Recorded, or computed?
 
-A **noun** is something you record and then accumulate: a customer, a permission, a visit. A
-**verb** is something you compute from what you recorded: a daily rollup, an attribution rule, a
-report.
+Ask that of anything before you score it, because the deletion test has a different form for
+each.
 
-Nouns are irreversible because data cannot be un-collected — a field you didn't write in March
-is not available in June. Verbs are expendable because they re-run: change the rule, recompute,
-and history moves with it.
+What you **record** accumulates and cannot be un-collected: a field you didn't write in March
+is not available in June. What you **compute** is expendable, because it re-runs — change the
+rule, recompute, and history moves with it.
 
-So the deletion test has two forms:
+- **For something you record** — if we deleted this, what else would we have to touch?
+- **For something you compute** — if we deleted this, could we rebuild it, and from what?
 
-- **For a noun** — if we deleted this, what else would we have to touch?
-- **For a verb** — if we deleted this, could we rebuild it, and from what?
-
-A verb whose input you kept is cheap to lose. **A verb whose input you discarded is a noun you
-did not know you were creating** — which is what happened the day someone stored a date instead
-of a timestamp.
+A computed result whose input you kept is cheap to lose. **A computed result whose input you
+discarded is now a permanent record, and nobody decided to make one** — which is what happened
+the day someone stored a date instead of a timestamp.
 
 ## The three tiers
 
@@ -61,7 +58,7 @@ where design effort pays.
 - **Published contracts** — external consumers you cannot coordinate
 - **Multi-tenancy model** — single to multi-tenant is one of the worst migrations there is, and
   it is usually decided by accident on day one
-- **Identity and authorization** — the permission *shape* is a noun, ends up denormalized into
+- **Identity and authorization** — the permission *shape* gets recorded, denormalized into
   every query, and is brutal to change
 - **Consistency and source-of-truth ownership** — who owns which fact, what is transactional and
   what is eventual. Not "do we use Kafka" — *where does truth live*
@@ -100,7 +97,7 @@ org-wide version would deserve.
 
 There is one real irreversibility inside that debate, and it is not the one people argue:
 
-> **Does the stack leak into the nouns?**
+> **Does the stack leak into the schema?**
 
 If your domain model *is* your ORM model, the framework choice has been welded to the schema.
 The ORM's conventions — how it names tables, picks primary keys, maps inheritance, expresses
@@ -115,7 +112,7 @@ keeping the expendable layer expendable. It is what "hexagonal" and "ports and a
 what it needs from storage, and the framework implements that, rather than the framework
 defining what the domain is.
 
-So the useful question is narrow: *can the nouns be expressed without the framework?* Yes, pick
+So the useful question is narrow: *can the domain types be expressed without the framework?* Yes, pick
 a convention and stop arguing. No, and you have promoted a Tier 2 decision into Tier 1.
 
 Two moves buy most of the protection, and neither requires a full mapping layer. **Hand-write
@@ -198,14 +195,33 @@ value and it needs a name from the fourteen in §3 — the verdicts below are dr
 | "we could hold less than the policy allows" | nobody | **Data Minimization** |
 | "data must stay in-region" | contract or regulator | threshold |
 | "fewer copies across fewer vendors" | nobody | **Data Minimization**, or **Isolation** |
+| "daily rates don't compose into a range rate" | arithmetic | **found threshold** |
+| "we can't backfill it" | nobody — it was never recorded | **found threshold** |
+| "this won't scale", no number offered | nobody, and nothing shown | **not a line.** An unfalsifiable veto |
 
 A team can draw its own line — "we keep p99 under 200ms" — and once a line exists it behaves as
 a threshold whoever drew it. The question is a way of finding out whether one exists at all,
 not a rule that only outside lines count.
 
-## A threshold needs an owner and a date
+## Some lines nobody drew
 
-Thresholds get invented. "The security policy says so" is often one person's wiki page from
+Sometimes the answer is *nobody, and it is still a line* — the last three rows above. Arithmetic,
+physics, an upstream schema and the data you failed to record all disqualify options without
+anyone deciding to. So the distinction that matters is not inside or outside the org. It is
+**drawn or found**:
+
+- A **drawn line** has a person behind it: a regulator, a contract, a product manager, your own
+  team. It could have been different, which means it is negotiable and worth checking.
+- A **found line** has no author. Daily unique users do not sum into a range unique count. You
+  cannot read a field you never wrote — §1's recorded-versus-computed rule, arriving later as a
+  constraint. Nobody chose these and nobody can unchoose them.
+
+Both filter options before anything is compared. They differ in how you check them, and in what
+is left when nothing clears the bar.
+
+## A drawn line needs an owner and a date
+
+Drawn lines get invented. "The security policy says so" is often one person's wiki page from
 three years ago — and a threshold is the strongest move available in this document, because it
 disqualifies options before anyone compares them and leaves nobody to argue with.
 
@@ -219,12 +235,34 @@ An owner who is not in the room does not make the threshold unchallengeable. It 
 conversation is with them, and the cost of not having it is whichever option you just
 discarded.
 
+## A found line needs a demonstration
+
+Found lines get forged too, and it is the more dangerous forgery, because arithmetic is not in
+the room to object. The check cannot be who owns it — nobody does. It is whether the line can be
+*shown*. Two days and three visitors on a napkin is the whole proof that daily unique counts do
+not sum, and the option is gone before anyone weighs it:
+
+| Day | Visitors | Daily uniques |
+|---|---|---|
+| Day 1 | A, B | 2 |
+| Day 2 | A | 1 |
+| Range | A, B | **2, not 3** |
+
+A found line nobody can demonstrate — no napkin, no number, no growth story — is a hunch wearing
+arithmetic's clothes. That is exactly what "this won't scale" is, and §3 files it as a veto
+rather than a reason.
+
 ## When nothing clears the bar
 
 Sometimes no option survives the filter. That is not a hard trade-off, it is a different
 conversation: the bar moves, the scope shrinks, or the work doesn't happen. Take it to whoever
 owns the threshold. Picking the least-disqualified option and hoping is how a compliance
 problem becomes a launch problem.
+
+That advice assumes a drawn line. A found line has nobody to take it to, so the bar does not
+move and only two options remain: change the scope, or find a shape that does not need the
+impossible thing. A rate that cannot be summed does not become summable because the spec asked
+for the chart.
 
 ---
 
@@ -264,7 +302,7 @@ value pulling the other way, never from inside one.
 | The next developer | **Legibility** | The new hire in week two | How fast can someone form a *correct* mental model? |
 | The next developer | **Ergonomics** | The developer on another team wiring this up | How much do they have to do, and how much must they know first? |
 | The next developer | **Convergence** | The developer designing the *next* service | Will they reuse what we picked, or add another way of doing this? |
-| The operator | **Operability** | The person on call at 3am | Can I see what it's doing, and fix it without waking anyone else? |
+| The operator | **Operability** | The person on call at 3am — and the person who should have been paged and wasn't | Can I see what it's doing, would I find out if it were wrong, and can I fix it without waking anyone else? |
 | The payer | **Economy** | The engineer who has to ship it this quarter | How much work is this, to build and to keep alive? |
 | The payer | **Speed** | Whoever is waiting on this to be useful | How soon can we ship it? |
 | The person in the data | **Data Minimization** | The engineer asked, after a leak, why we still had it | Why did we keep this, and why for this long? |
@@ -304,7 +342,7 @@ grow**:
 Constant-time reads are nearly always bought at write time — an index, a counter, a cache, a
 denormalized column, a pre-computed rollup — so Headroom usually costs Economy and Legibility.
 Watch for one specific trap: the cheapest way to make a read O(1) is to store the answer, and a
-stored answer is a verb's output kept as your only noun. Storing `count` instead of the rows
+stored answer is a computed result kept as your only record. Storing `count` instead of the rows
 buys Headroom and destroys Re-derivability in the same move, and nobody notices until someone
 asks a question the stored number cannot answer.
 
@@ -364,7 +402,8 @@ The second half of the sentence comes from here.
 - **Headroom ↔ Legibility** — sharding, caching and denormalization all obscure the thing they
   speed up
 - **Operability ↔ Economy** — the logs, metrics, traces and runbooks that make a 3am fix
-  possible are all built long before anyone needs them
+  possible are all built long before anyone needs them, and the reconciliation job that would
+  catch a silently wrong number is built for a page that may never come
 - **Reversibility ↔ Economy** — a shadow table, a dual write and a soak are built twice and
   thrown away once
 - **Reversibility ↔ Speed** — the fortnight that proves the new path is the fortnight you did
@@ -413,8 +452,17 @@ The whole point is to stop these from being interchangeable.
 
 ## When the vocabulary is missing a word
 
-If you keep reaching outside the fourteen, the set has a hole and should grow. That is a better
-outcome than quietly improvising, which is the state this document exists to end.
+If you keep reaching outside the fourteen, the set has a hole. That is worth knowing either way,
+because the alternative is quietly improvising, which is the state this document exists to end.
+
+But growing the set is the second thing to try, not the first. More often the word is already
+here and its row is drawn too tight — the persona was written for one situation and the question
+followed the persona. Operability was originally scoped to the person on call at 3am, which
+quietly excluded the case where nothing pages anyone and a wrong number accumulates for a year;
+that reads as a missing value right up until you notice it is the same value with a narrow
+definition. The tell is the tension line. **If the word you want would be bought with the same
+artifacts, at the expense of the same value, as one already on the list, it is that value and the
+row needs widening.** Two values that cost the same thing are one value.
 
 The bar for adding one: it is monotone, it has a persona who wants it and nothing else, and it
 is in tension with something already on the list. And it has to be able to sit in the *for*
@@ -547,7 +595,7 @@ Defaults, not rules. They tell you which two values to reach for first.
 Two of these are worth stating explicitly, because they are where teams most often optimise the
 wrong half:
 
-**Tenancy, authorization and consistency are decisions about nouns.** They describe who exists, who may see what,
+**Tenancy, authorization and consistency decide what gets recorded.** They describe who exists, who may see what,
 and who owns which fact, so the domain has an answer and the spec probably has not asked for it.
 *Does an account really have one organization? Can a person really hold only one role?* The
 answer is almost always "no, we just don't support it yet" — the same mistake as a single
@@ -603,6 +651,7 @@ rarely written down, so you recover the values you used, bounded by your past im
 | "It's cleaner" | Legibility or Convergence, unnamed. Ask which |
 | "We can always change it later" | The gate, not a reason. Run the deletion test |
 | Latency or compliance argued as a trade-off | A threshold treated as a value |
+| A threshold with no owner, no date, and no demonstration | A found line nobody has shown, or a preference. Ask for the napkin |
 | Only one approach was ever considered | There was no decision to explain |
 | A trade written out for a layering or naming choice | Ceremony on a Tier 3 decision |
 | Nobody can say why the tenancy or permission shape is what it is | A Tier 1 decision made silently by the first migration |
@@ -613,14 +662,50 @@ rarely written down, so you recover the values you used, bounded by your past im
 
 # Compressed
 
-- Sort by cost of being wrong. Score it with the deletion test, in noun form or verb form.
-- Nouns accumulate and cannot be un-collected. Verbs recompute. Never store a verb's output as
-  your only noun.
+- Sort by cost of being wrong. Score it with the deletion test — ask it differently for what
+  you record and for what you compute.
+- What you record accumulates and cannot be un-collected. What you compute re-runs. Never store
+  a computed result as your only copy of its input.
 - Tier 1 is irreversible — data model, boundaries, contracts, tenancy, authorization,
   consistency. That is where the effort belongs.
 - The loudest debates are Tier 3 and reversible. Convention, not deliberation.
 - Say it in two halves: **chose X for A, accepting B.** Use the fourteen words, not synonyms.
-- Thresholds are not values. Filter them first.
+- Thresholds are not values. Filter them first — some are drawn and negotiable, some are found
+  and not.
 - Spend the reversible value to buy the irreversible one. The reverse needs a much higher bar.
 - Name who pays. If they are not in the room, ask them.
 - Read the records back once a year. That is what tells you what this organization values.
+
+---
+
+# Relevant approaches
+
+Where these ideas come from, and where this document parts company with them.
+
+**One-way and two-way doors** (Jeff Bezos, Amazon shareholder letters). Decisions split into
+irreversible and reversible, with deliberation reserved for the first kind. The tiers here are
+that split with the middle case named — most software decisions are neither a one-way door nor
+free, and Tier 2 is where they live.
+
+**Architecture as the decisions that are hard to change** (Martin Fowler, building on Ralph
+Johnson). The same axis, used to define what counts as architecture. This document borrows the
+definition and asks what follows from it on a Tuesday afternoon.
+
+**Architecture Decision Records** (Michael Nygard). Write down the decision, its context and its
+consequences. ADRs assume you already know which decisions are architecturally significant;
+§1 is an attempt to answer that, and the *for / accepting* sentence is meant to sit inside an
+ADR rather than replace it.
+
+**Magic Lenses, from the Foundation Sprint** (Jake Knapp and John Zeratsky). The origin of the
+values idea: you pick an approach by naming what you value, not by scoring a rubric. Diverged
+from deliberately — the 2x2 grids are gone, because a position on a plane records a verdict and
+throws away the reasoning.
+
+**Real options, and the last responsible moment** (Chris Matts and Olav Maassen; Mary and Tom
+Poppendieck). Deferring a commitment has value, and that value can be reasoned about rather
+than felt. It is the argument behind *if all three come out even, the decision is not ready* —
+not a tie to break, but a signal to go and buy information.
+
+**Event sourcing and CQRS.** The recorded-versus-computed distinction in §1 is the same shape as
+events against projections: facts accumulate, views rebuild. If you already think that way about
+storage, §1 is that idea applied to decisions.

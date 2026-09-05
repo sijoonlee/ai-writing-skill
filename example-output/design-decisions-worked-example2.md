@@ -65,7 +65,8 @@ which is the part implementations leave out.
 
 **The server cannot check invariants.** It sees `set /status to approved` without the record
 around it, so validation and authorization become path-based — a permission model expressed
-over JSON paths, which is the noun-shaped permission problem in its least tractable form.
+over JSON paths — a permission model shaped by where data sits rather than by what it means,
+which is the least tractable form that problem takes.
 
 Each of these is a Tier 1 failure in disguise: the symptom is bad rows, and you cannot un-write
 a row.
@@ -80,7 +81,7 @@ bounded by cache TTL, effectively Tier 2 — you can support both shapes for a r
 retire the old one on a threshold.
 
 **Persisted.** If a diff is written anywhere — an audit trail, an event stream, an undo history
-— then the diffs are **nouns**. Path semantics are frozen permanently, every future schema
+— then the diffs are **records**. Path semantics are frozen permanently, every future schema
 change has to keep old paths interpretable, and no migration recovers it, because the records
 those paths described are gone. This is the version you cannot get out of.
 
