@@ -353,35 +353,27 @@ silently.** Nobody holds a design review on the tenancy model or the permission 
 decided by whoever wrote the first migration, on a Tuesday, in twenty minutes. That is where the
 2am backfill comes from.
 
-Layering is the clearest case, with one distinction that matters. Restructuring the layering
-*inside one service* is among the most reversible things you can do: pure code, no data
-touched, no consumer notified, a week's work. Changing a layering convention that eight teams
-have internalised is not — that is org gravity, the tooling assumes it, and every review
-reinforces it. Same word, two tiers.
-
-The argument engineers actually have — clean architecture, ports and adapters, the service
-layer is anemic — is almost always about one service, conducted with the intensity the
-org-wide version would deserve.
-
-There is one real irreversibility inside that debate, and it is not the one people argue:
-
 > **Does the stack leak into the schema?**
 
 If your domain model *is* your ORM model, the framework choice has been welded to the schema.
 The ORM's conventions — how it names tables, picks primary keys, maps inheritance, expresses
 optional — are now shapes in your database with two years of rows in them. So swapping the ORM,
-a Tier 2 rewrite you should be able to afford, means reshaping tables under live data, which is
-a Tier 3 cost you can't. The reversible decision has been promoted into the irreversible tier
-without anyone deciding to promote it.
+a tier 1 rewrite you should be able to afford, means reshaping tables under live data, which is
+a tier 3 cost you can't.
 
-That is the actual content of the layering argument. Not the principle usually called
-*purity* — that a domain should never know the database exists — but the practical business of
-keeping the expendable layer expendable. It is what "hexagonal" and "ports and adapters" are for: the domain declares
-what it needs from storage, and the framework implements that, rather than the framework
-defining what the domain is.
+This is the residue principle from §1, arriving as a design rule: the commit that lets the ORM
+define your tables decided what gets written down, so its tier came from the rows, not from the
+diff. Nobody chose to promote it.
+
+This is the one thing genuinely at stake in the **layered-architecture debate** — clean
+architecture, ports and adapters, whether the service layer is anemic, where the repository
+interface belongs. Not the principle usually called *purity*, that a domain should never know
+the database exists, but the practical business of keeping the framework replaceable. That is
+what "hexagonal" and "ports and adapters" are for: the domain declares what it needs from
+storage and the framework implements that, rather than the framework defining what the domain is.
 
 So the useful question is narrow: *can the domain types be expressed without the framework?* Yes, pick
-a convention and stop arguing. No, and you have promoted a Tier 2 decision into Tier 3.
+a convention and stop arguing. No, and you have promoted a tier 1 decision into tier 3.
 
 Two moves buy most of the protection, and neither requires a full mapping layer. **Hand-write
 the migrations**, so the schema is something you designed and the ORM maps to it rather than
