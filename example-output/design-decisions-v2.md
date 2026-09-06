@@ -301,6 +301,23 @@ can arrive later, with nobody doing anything.** A decision sitting safely at tie
 "we can rebuild it from the events" a claim with an expiry date, and the useful follow-up is
 always: *for how long?*
 
+It does not arrive immediately either. Between shipping a writer and the records becoming
+load-bearing there is a **grace period** in which the decision is still fully recoverable —
+nothing reads the rows yet, and the few days of them you have are cheap to throw away. Get the
+day boundary wrong in that window and the fix is `dropCollection()` and a redeploy. The window
+closes when something starts depending on the records, or when enough history accumulates that
+discarding it costs more than living with the seam.
+
+Both ends are designable, and that is the one place tier X has advice other than *you should
+have*:
+
+- **Widen the grace period** by shipping the writer before the reader, and letting it run against
+  real traffic while nobody depends on the output. A consumer that spends two weeks writing
+  aggregates nobody reads is buying exactly this — a stretch of time in which being wrong about
+  what to record is still free.
+- **Push out the expiry** by keeping the raw input longer than you think you need it, which is
+  Re-derivability bought with Economy and Data Minimization.
+
 ## Why tier X can't be weighed
 
 Tiers 1 to 3 can be priced at the table. A week, a migration and a soak, a deprecation cycle
@@ -1014,6 +1031,8 @@ the move, because a flag that stops at a diagnosis just leaves you knowing somet
   written, or written and no longer usable. It stacks onto a tier rather than ranking above one.
 - Tier X can arrive **later, with nobody doing anything** — retention expiry turns tier 3 into
   tier X on a schedule. "We can replay the stream" has an expiry date; ask what it is.
+- It doesn't arrive immediately either. Ship the writer before the reader and you buy a **grace
+  period** where being wrong about what to record still costs a `dropCollection()`.
 - A code change is tier 1 only if reverting it leaves **no residue in storage**. Once the commit
   decides what gets written down, the rows set the tier, not the diff.
 - Tier X can't be priced at the table, so it gets weighed at zero. What you *can* check is what
