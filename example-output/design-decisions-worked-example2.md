@@ -12,7 +12,7 @@ A web application and a back-end server share a data model. When the user saves,
 computes a JSON diff between the record it loaded and the record on screen, and sends the diff.
 The server applies it to the row.
 
-It reads as a payload optimisation — a Tier 3 detail about how one endpoint is shaped.
+It reads as a payload optimisation — a Tier 1 detail about how one endpoint is shaped.
 
 ## Tier, and what it turns on
 
@@ -25,9 +25,9 @@ is the question nobody asks — see below.
 
 But the tier is not set by the mechanism. It is set by who the consumers are.
 
-### The wire format was always Tier 1
+### The wire format was always Tier 3
 
-Tier 1 includes published contracts — external consumers you cannot coordinate. Teams exclude
+Tier 3 includes published contracts — external consumers you cannot coordinate. Teams exclude
 the browser from that list because both ends are in-house, which is a fact about org chart and
 deploy pipeline, not about coupling.
 
@@ -36,8 +36,8 @@ Friday's bundle. You cannot upgrade every client at once, so **every version of 
 have ever shipped is a consumer you do not control**. The browser is not internal; it is the
 least coordinated consumer you have.
 
-Nothing was promoted here. The contract was Tier 1 from the first deploy, and was being managed
-as if it were Tier 3.
+Nothing was promoted here. The contract was Tier 3 from the first deploy, and was being managed
+as if it were Tier 1.
 
 ## What diffs weld together
 
@@ -49,8 +49,8 @@ client addresses a location that no longer exists. The data model and the wire c
 longer move independently.
 
 This is the same shape as an ORM welded to a schema, with one difference that makes it worse.
-There, a Tier 2 decision was bound to a Tier 1 asset, and you could always sacrifice the
-framework. Here **both sides are Tier 1**, so there is no expendable half to give up.
+There, a Tier 2 decision was bound to a Tier 3 asset, and you could always sacrifice the
+framework. Here **both sides are Tier 3**, so there is no expendable half to give up.
 
 ## Three failures that damage data instead of breaking loudly
 
@@ -68,7 +68,7 @@ around it, so validation and authorization become path-based — a permission mo
 over JSON paths — a permission model shaped by where data sits rather than by what it means,
 which is the least tractable form that problem takes.
 
-Each of these is a Tier 1 failure in disguise: the symptom is bad rows, and you cannot un-write
+Each of these is a Tier 3 failure in disguise: the symptom is bad rows, and you cannot un-write
 a row.
 
 ## The fork: are the diffs stored?
@@ -91,7 +91,7 @@ make debugging easier.
 ## Neither half is expendable, so which one do you free?
 
 The asymmetry test in the main document — spend the reversible value to buy the irreversible
-one — has nothing to say here, because both sides are Tier 1. Its fallback is three questions,
+one — has nothing to say here, because both sides are Tier 3. Its fallback is three questions,
 and on this case all three point the same way.
 
 **Can either half be made smaller, or later?** The schema cannot: rows are accumulating now.

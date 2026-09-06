@@ -84,18 +84,18 @@ A lead price is `{ partnerId, vertical, leadPrice, startDate, endDate?, createdB
 
 ### What this feature only gets one attempt at
 
-Sorted by what it costs to be wrong, not by how much argument each one attracted. Every decision below closes with an **If wrong** line carrying the same tier, so a reviewer with ten minutes can read the Tier 1 ones and skip the rest.
+Sorted by recovery tier, not by how much argument each one attracted. Numbers go up as recovery gets harder; tier X means no recovery exists at all, and the letter marks it as off the reach axis rather than further along it — tier X stacks onto a tier rather than ranking above it, so a decision can be tier 3 and tier X at once. Every decision below closes with an **If wrong** line carrying its tier, so a reviewer with ten minutes can read the 3s and Xs and skip the rest.
 
 | Decision | Deletion test — if this is wrong, what do we touch? | Tier |
 | --- | --- | --- |
-| The aggregate's day key is a Toronto date label | A collection of daily documents whose time-of-day was discarded at write. Recoverable only by reprocessing the conversions stream, and only for as long as that stream is retained | **1** |
-| Lead price is an effective-dated period | A financial record with attribution on every row. A single-price model cannot be un-flattened — the days a price applied to were never written down | **1** |
-| Lead prices live in their own collection, not in `organization` | Rows plus one team boundary. Moving them later is a migration through an onboarding-owned document | **1** |
-| Attribution reads `conversions:status-changed` | The counter, and the meaning of every aggregate written before we noticed. Attribution moving out of `track-conversion-from-inquiry` is a silent-wrong, not a broken-loud | **1** |
-| Daily aggregates instead of aggregate-on-read | A consumer and a collection — both rebuildable from the stream, so this is a rewrite, not a data loss | 2 |
+| The aggregate's day key is a Toronto date label | Time-of-day was discarded at write. Reprocessing the stream repairs it only while the stream is retained; after that nothing does | **3, then 4** |
+| Lead price is an effective-dated period | A single-price model cannot be un-flattened — the days a price applied to were never written down | **4** |
+| Lead prices live in their own collection, not in `organization` | Rows plus one team boundary. The migration is straightforward; the coordination is not | **3** |
+| Attribution reads `conversions:status-changed` | The counter, and the meaning of every aggregate written before we noticed. Attribution lives in code we don't own | **3** |
+| Daily aggregates instead of aggregate-on-read | A consumer and a collection — both rebuildable from the stream | 2 |
 | Revenue computed at read time | Portal code only. No stored money anywhere | 2 |
-| Which chart ships | A React component | 3 |
-| Mortgage gating mechanism | A flag | 3 |
+| Which chart ships | A React component | 1 |
+| Mortgage gating mechanism | A flag | 1 |
 
 Two things follow. **The recorded/computed line is where the risk is.** Counts, revenue and the chart are all computed and therefore expendable — change the rule, recompute. The Toronto day key and the price periods are *recorded*, and a recorded thing that was never written cannot be recovered later: the same reason the no-backfill answer below is forced rather than chosen. **The Toronto day key is the one place this design converts a computed result into a permanent record**, because aggregation throws away the instant it was derived from. That is why it gets a decision of its own rather than a line in the SDD.
 
@@ -127,13 +127,13 @@ Uncontested, but written in halves anyway — the cost of the sentence is eight 
 - **And Convergence** — the standard `@ratehub/sdk` consumer, the shape every other consumer in the platform already has.
 - **Accepting Isolation** — the correctness of every number on this dashboard now depends on `track-conversion-from-inquiry` staying the attribution point, and that is another team's code with no contract saying so.
 - **And Enforceability** — the `affiliate` field is free-form, so nothing but defensive parsing stands between a malformed value and a silently missing partner's leads.
-- **If wrong** — Tier 1. Not because the consumer is expensive to rewrite, but because attribution drifting produces aggregates that look fine and are wrong, for as long as nobody checks.
+- **If wrong** — tier 3. Not because the consumer is expensive to rewrite, but because attribution drifting produces aggregates that look fine and are wrong, for as long as nobody checks.
 
 **Lead price is an effective-dated period, not one editable number**
 - **For Fidelity** — a contracted price genuinely has a start and an end in the world, and the revenue over a range is computable only if we know the price on each day.
 - **And Re-derivability** — a single mutable field silently recomputes all past revenue at today's price, which is exactly the trap of storing a computed answer and discarding its input.
 - **Accepting Economy** — a heavier admin UI, already built; settled in PRD review.
-- **If wrong** — Tier 1, and the only one on this list that cannot be repaired at all. A single-price model is not a smaller version of this one: the days each price applied to were never written down, so there is nothing to migrate from. Getting the period shape wrong in the *other* direction is cheap — periods collapse to one price, one price does not expand into periods.
+- **If wrong** — **tier X**, and the only one on this list with no recovery at all. A single-price model is not a smaller version of this one: the days each price applied to were never written down, so there is nothing to migrate from. Getting the period shape wrong in the *other* direction is cheap — periods collapse to one price, one price does not expand into periods.
 
 **Lead prices live in a standalone collection, one document per period**
 - **For Isolation** — financial history does not belong in the onboarding-owned `organization` document, which would slowly become a changelog dragged along by every org fetch. This is a team boundary as much as a schema one.
@@ -141,13 +141,13 @@ Uncontested, but written in halves anyway — the cost of the sentence is eight 
 - **Accepting Enforceability** — overlap refusal is now application logic rather than a single-document invariant, so the rule holds only as long as every writer remembers it.
 - **And Economy** — one extra indexed query per dashboard render.
 - **Note the direction**: this is the reversibility asymmetry running the right way. The invariant we gave up is enforceable in code today; the document boundary, once financial history is inside `organization`, is a migration through somebody else's data.
-- **If wrong** — Tier 1, by ownership rather than by volume. The rows are few and the shape is simple, but the two candidate homes belong to two teams, so moving them later is a coordinated migration through an onboarding-owned document rather than a schema change we can make alone.
+- **If wrong** — tier 3, by ownership rather than by volume. The rows are few and the shape is simple, but the two candidate homes belong to two teams, so moving them later is a coordinated migration through an onboarding-owned document rather than a schema change we can make alone.
 
 **Revenue is computed at read time, counts × price-per-day**
 - **For Re-derivability** — fixing a mistyped price heals history rather than leaving a frozen wrong number in every past day.
 - **And Isolation** — the aggregates stay money-free and vertical-agnostic, and the consumer never learns that admin data exists.
 - **Accepting Economy** — the portal owns the revenue math plus a small join per view, bounded by design at ≤ 365 rows × a few periods. Bounded `n`, so optimising it would spend Economy for nothing.
-- **If wrong** — Tier 2, and cheaply so: no money is stored anywhere, so backing this out is portal code and nothing else. The Tier 1 version of this decision is the one we did *not* make — stamping revenue onto each aggregate at write time would have frozen every typo into rows we would then have to correct by hand.
+- **If wrong** — Tier 2, and cheaply so: no money is stored anywhere, so backing this out is portal code and nothing else. The heavier version is the one we did *not* make — stamping revenue onto each aggregate at write time would have frozen every typo into rows, and dropped the prices that produced them, which is how a tier 2 decision turns into a tier X one.
 
 ### Daily aggregates, and the day key that comes with them
 
@@ -162,14 +162,14 @@ Uncontested, but written in halves anyway — the cost of the sentence is eight 
 - **Accepting Economy** — a new long-running consumer to own — **and Enforceability**, since at-least-once redelivery means idempotency is now ours to get right rather than the platform's.
 - **Not accepting Re-derivability.** The cheap version of this optimisation stores `count` and destroys the ability to recompute it. Storing the *set of processed conversion ids* and deriving the count from its size costs a document that grows with a partner's daily leads, and buys back both idempotency and the ability to answer questions a bare number cannot. That is the extra we paid on purpose, and it is the line most likely to be undone by someone who reads the schema and not this paragraph.
 - **We accept** an id set that stays tiny only while one partner × one product type × one day stays small — revisit at thousands of leads per partner per day.
-- **If wrong** — Tier 2. Both the consumer and the collection rebuild from the stream, so this is a rewrite, not a migration.
+- **If wrong** — tier 2. Both the consumer and the collection rebuild from the stream, so this is a rewrite, not a migration.
 
-The day key is a separate decision hiding in the same schema, and it is the Tier 1 one.
+The day key is a separate decision hiding in the same schema, and it is the dangerous one.
 
 - **Chose** the `America/Toronto` calendar day of `content.created` as a plain `YYYY-MM-DD` label.
 - **For Fidelity** — a UTC bucket misfiles roughly 8 pm–midnight Toronto traffic into the next day, and misaligns counts against the Toronto-dated price periods revenue is computed from. Partners read these numbers in Toronto business days; so do the contracts.
 - **Accepting Legibility** — a date field that silently carries a timezone in its definition and not in its type is exactly the shape that produces the "stored a date instead of a timestamp" incident, so the label's meaning has to live in documentation and in reviewers' heads.
-- **If wrong** — Tier 1, with one mitigation. Aggregation discards time-of-day, so nothing in the aggregate can repair the boundary. It is recoverable only by reprocessing `conversions:status-changed` through `replay-helper`, and only for as long as that stream is retained. Beyond retention, the answer is gone.
+- **If wrong** — **tier 3 while the stream is retained, tier X after.** Aggregation discards time-of-day, so nothing in the aggregate repairs the boundary; only reprocessing `conversions:status-changed` through `replay-helper` does, and only until retention expires. The diff is one consumer and looks tier 1, but the commit decided what gets written down, so the tier comes from the rows and not from the code — tier 3 — with tier X underneath once retention expires.
 
 ### The chart
 
@@ -184,14 +184,14 @@ The day key is a separate decision hiding in the same schema, and it is the Tier
 - **For Legibility** — the range is the only level at which the rate is arithmetically correct, and a dashboard should not invite a comparison that cannot reconcile.
 - **And Speed** — the chart needs only the counter's aggregates, so it ships without waiting for the Users source.
 - **Accepting Fidelity against the PRD's intent** — after the filter, *nothing* on this dashboard shows conversion effectiveness over time, because no correct version of that chart exists at this grain. That is a scope answer, not a design one, and it belongs back with product rather than buried here.
-- **If wrong** — Tier 3. A React component and a week. The deliberation above lives entirely in the filter; once C and A are out, B over D is a convention call, recorded because the PRD says otherwise and not because the choice was hard.
+- **If wrong** — tier 1. A React component and a week. The deliberation above lives entirely in the filter; once C and A are out, B over D is a convention call, recorded because the PRD says otherwise and not because the choice was hard.
 
 ### Mortgage gating
 
 - **Chose** the existing per-partner feature-flag system over a dedicated flag.
 - **For Convergence** — one mechanism for "is this partner allowed to see this", not two.
 - **Accepting** nothing worth naming.
-- **If wrong** — Tier 3. A flag, and an afternoon. Recorded only because a reviewer asked.
+- **If wrong** — tier 1. A flag, and an afternoon. Recorded only because a reviewer asked.
 
 ## Milestone list
 
@@ -207,7 +207,7 @@ The order buys **Reversibility**, and it is bought rather than merely observed: 
 
 ### Testing targets arithmetic and redelivery, co-owned with QA
 
-The two Tier 1 exposures above are exactly what the tests point at: the day boundary that cannot be corrected at read time, and the idempotency we accepted ownership of.
+The two worst exposures above are exactly what the tests point at: the day boundary that cannot be corrected at read time, and the idempotency we accepted ownership of.
 
 - **Unit** — lead-price period logic (overlap refusal, open ends, Toronto day boundaries including DST), revenue math (counts × dated prices, a price change mid-range), event parsing (missing or malformed `aff_id`, unknown `productType`).
 - **Integration** — consumer idempotency: the same conversion delivered twice yields one count, and a replay over processed events changes nothing.
@@ -226,7 +226,7 @@ One caveat in the vocabulary's terms: **rollback undoes the deploy, not the rows
 | Question | Assignee | Answer |
 | --- | --- | --- |
 | Should we backfill numbers for existing partners? | Sijoon/Artem | **No backfill — and this is a constraint, not a trade.** Users cannot be backfilled: nothing recorded visits before collection starts, and a fact you did not write in March is not available in June. Backfilling only Leads would then divide a full lead count by a partial Users count, inflating Conversion Rate for every range reaching back before collection start — a **Fidelity** failure, not a cosmetic one. All numbers begin at collection start, so "since beginning" means "since collection began". **Accepting Legibility**: the dashboard copy now has to say so, because the label lies otherwise. |
-| Mortgage per-partner visibility — existing feature-gate machinery or a dedicated flag? | Sijoon | Re-use the flag system. Convergence; Tier 3. |
+| Mortgage per-partner visibility — existing feature-gate machinery or a dedicated flag? | Sijoon | Re-use the flag system. Convergence; tier 1. |
 | Final disclaimer copy per tab (we have it for P&C only) | Artem |  |
 
 ## Appendix

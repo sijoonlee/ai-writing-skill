@@ -25,9 +25,10 @@ The proposed approach:
 
 ### Tier, and what it turns on
 
-**Tier 1 — data model.** Analytics has the worst form of data gravity: what you didn't record,
-you cannot recover, because the visits already happened and nobody will make them again. There
-is no backfill.
+**Tier X — data model.** Not tier 3: the table is ours and we could migrate it tomorrow. What
+puts it off the reach axis entirely is that what you didn't record, you cannot recover — the
+visits already happened and nobody will make them again. There is no backfill, so the reach
+question has nothing to work with.
 
 Run the deletion test in the form for computed things — *if we deleted this, could we rebuild
 it, and from what?* Every number on the dashboard is derived, and the only thing they are derived from is
@@ -72,7 +73,7 @@ the vocabulary of the main document: the computed result is the only record. The
 separate them.
 
 ```
-visit_events                          ← append-only, the truth (Tier 1: recorded)
+visit_events                          ← append-only, the truth (Tier 3: recorded)
   event_id
   visitor_id
   occurred_at      timestamptz        ← instant, not date
@@ -92,7 +93,7 @@ campaign_daily_uniques                ← derived, recomputable
 The original table survives as the middle layer, because range uniques genuinely need distinct
 tuples rather than counts. It just stops being the thing that can never be rebuilt.
 
-The event log is the **Tier 1 record**, fitted to the domain. The rollups are **Tier 3
+The event log is the **Tier 3 record**, fitted to the domain. The rollups are **Tier 1
 computations** — expendable, so the timezone, the attribution rule and the bot filter can all
 change and history recomputes behind them. In the original design, none of those are
 recoverable.

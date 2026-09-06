@@ -29,32 +29,163 @@ test** instead — referred to by that name for the rest of this document:
 
 > **What's the smallest unit here we could delete outright, and what would we have to touch?**
 
-"A module" means you're fine. "A table with two years of rows in it, and the three services
-that read from it" means you have located the part of the design you only get one attempt at.
+"A module" means you're fine. "A table with two years of rows in it, and the three services that
+read from it" means you have work ahead — though notice that phrase bundles two different
+difficulties, and you should say which one you have. Rows you can migrate. Readers you own are a
+coordinated deploy. Readers you cannot reach are the wall.
+
+The test is an investigation, not a verdict. What it is investigating is **reach**.
+
+## The recovery tiers — how long the old version survives
+
+Every decision here is a version of something, and its **recovery tier** is how long the version
+you are replacing sticks around after you ship the replacement.
+
+**The numbers go up as recovery gets harder** — tier 1 is easiest, tier 3 is hardest. That is the
+opposite of the Sev-1 and P1 conventions most incident tooling uses, so it is worth saying out
+loud once: this is a difficulty scale, not a severity scale. **Tier X is not a number**, and the
+letter is doing deliberate work — see below.
+
+| | The old version survives… | Which means |
+|---|---|---|
+| **Tier 1** | not at all | one unit, one version at a time |
+| **Tier 2** | the migration window, and you decide when it closes | two versions coexist, so the change must be sequenced |
+| **Tier 3** | past your deploy, and past your reach | the window is not yours to close |
+| **Tier X** | irrelevant — there is nothing to recover *from* | never written, or written and no longer usable |
+
+Tiers 1 to 3 sit on one axis: how far you must reach to undo the decision. **Tier X is not
+further along that axis — it is off it.** Reach asks how hard it is to get back. Tier X asks
+whether there is anything left to get back *from*, which is a different question and is why it
+gets its own section below. Note that it does not require the information to have been
+destroyed by this decision, or at all: written and no longer usable counts the same as never
+written.
+
+Hence the letter. A "tier 4" would claim a position on the scale and invite people to read it as
+one-worse-than-3, when tier X does not sit anywhere on that scale at all. Two things make that
+concrete:
+
+- **It stacks rather than ranks.** Most tier X decisions are also tier 3, and you need both
+  labels: *tier 3* says the rows persist, *tier X* says nothing can rebuild them. A single number
+  can only tell you one of those, and a reviewer who hears "tier 3" will reasonably assume a
+  migration exists.
+- **It attaches to decisions with no reach at all.** "We won't collect visits until next quarter"
+  writes no code and touches no storage, so the ladder has no position to give it — and it
+  permanently decides that no report reaching back before then can be correct. Not off the top of
+  the scale; off the scale.
+
+X keeps the convenience of one label you can say in review while refusing the ordering that would
+make it wrong.
+
+Tier 2 includes data migrations. If you can backfill the rows and phase the old shape out on
+your own schedule, the window closes when you say so, and that is Tier 2 however many weeks it
+takes. Tier 3 is not "data is involved" — it is "the window is not mine."
+
+That is one axis, end to end, and it replaces the question people usually ask. "Is it
+reversible?" invites a yes. "How long does the thing I am replacing outlive my deploy?" has an
+answer you can check.
+
+It also explains why Tier 2 costs what it does. Not the hours — the fact that you have to keep
+both versions working at once and sequence your way out. Expand, migrate, contract. Tier 1 has
+no such window; Tier 3's window is not yours to close.
+
+## What counts as a contract
+
+Tier 2 begins at a contract, so the word needs a definition that settles cases rather than
+starting arguments:
+
+> **A contract is any interface whose two sides can be at different versions at the same time.**
+
+A function signature inside one module is not one — both sides ship together and the compiler
+catches the mismatch. An HTTP API, an event schema, a table two services read, a published
+library's public surface, a file format: all contracts, because during any change both versions
+exist at once.
+
+**If a change touches a contract, it is at least Tier 2 — whoever owns the other side.** Making
+ownership part of the classification means researching the caller before you can place the
+decision. Make it a floor instead, then ask the escalating question separately.
+
+And contracts escalate often, by two routes worth naming:
+
+- **Consumers you cannot reach.** Every client version you ever shipped is still out there, and
+  your code change cannot reach their code.
+- **Data written under the old contract.** The one people miss. Change `amount` from cents to
+  dollars and every row stored under the old meaning is now ambiguous. The contract change
+  propagated into persisted state without anyone touching the schema.
 
 ## Recorded, or computed?
 
-Ask that of anything before you score it, because the deletion test has a different form for
-each.
+This is what puts a decision above Tier 1, not a separate question. **Data is the version that
+does not go away when you finish releasing** — the only question left is whether you can reach
+it.
 
-What you **record** accumulates and cannot be un-collected: a field you didn't write in March
-is not available in June. What you **compute** is expendable, because it re-runs — change the
-rule, recompute, and history moves with it.
+What you **record** accumulates and cannot be un-collected: a field you didn't write in March is
+not available in June. What you **compute** is expendable, because it re-runs — change the rule,
+recompute, and history moves with it. So computed things sit at Tier 1 or Tier 2 by definition,
+since code is enough to regenerate them. Recorded things are the *candidates* for Tier 3 — they
+arrive there when the store is one you cannot rewrite, or when the information was never written
+at all. A record you can migrate on your own schedule is still Tier 2.
 
 - **For something you record** — if we deleted this, what else would we have to touch?
 - **For something you compute** — if we deleted this, could we rebuild it, and from what?
 
 A computed result whose input you kept is cheap to lose. **A computed result whose input you
 discarded is now a permanent record, and nobody decided to make one** — which is what happened
-the day someone stored a date instead of a timestamp.
+the day someone stored a date instead of a timestamp. The diff that does it looks tier 1; the
+rows it writes make it tier 3, and the input it dropped makes it tier X. That mismatch between
+how small the change looks and where it lands is the single most common way this happens.
 
-## The three tiers
+## What lands where
 
-**Tier 1 — irreversible.** Data gravity, org gravity, or consumers you don't control. This is
-where design effort pays.
+**Tier 1 — inside one unit.** One version at a time; a revert puts it back.
 
-- **Data model** — entities, cardinality, identity, history
-- **Service and domain boundaries** — because they become team boundaries
+There is a condition on that, and it is the one most often missed:
+
+> **A code decision is tier 1 only if reverting it leaves no residue in storage.**
+
+Once code decides *what gets written down*, its tier is set by the persistence, not by the size
+of the code. Reverting the commit does not un-write the rows the commit produced, so a small
+change that alters the shape of what you save is not tier 1 — it is tier 3 wearing a tier 1
+diff. Everything below passes that condition: none of it changes what ends up in storage.
+
+- **Layering and internal structure** — where business logic lives
+- **Error handling and retry patterns**
+- **Testing strategy**
+- **Module organization, naming conventions**
+- **Language and framework**, when the schema is yours and untouched — a port is enormous and
+  still tier 1, which is the point
+
+That last entry is what shows the tiers are not sorted by effort. A Python-to-Go port is a
+quarter of work and fully recoverable: no data moved, no consumer affected, nothing lost. A day
+key that discarded time-of-day took twenty minutes and cannot be recovered at all. Sorting by
+labor puts the port first. Sorting by what it costs to be *wrong* — which is what this document
+claims to do — puts the day key first, and that inversion is the whole point of §1.
+
+**Tier 2 — crosses a contract.** Still only code, but two versions coexist until you close the
+window.
+
+- **Integration style** — sync RPC or async events, orchestration or choreography
+- **Deployment topology** — monolith, modular monolith, services. Multi-*region* is tier 3, since
+  it moves data
+- **Splitting or merging services**, which creates the contracts that then have to be versioned
+- **Build vs. buy vs. borrow**, when what you buy is a capability rather than a home for your data
+- **Schema changes you can backfill** — a new table, a dual write, a cut-over, dropping the old
+  column. Weeks of work and a real plan, but the window is yours
+
+Data migrations are tier 2 **with a tail into tier X**, and that is why they feel heavier than the
+tier suggests. A code revert cannot lose anything. A botched backfill can destroy the column you
+were reading from, which turns a migration you could run into information nobody can recover. The
+tier describes the intended path; the tail is why you soak it.
+
+**Tier 3 — outlives your deploy.** Rows exist, clients are shipped, or somebody else holds the
+records. This is where design effort pays.
+
+- **Data model**, in the specific decisions that drop information or denormalize a shape into
+  stores you cannot rewrite — identity, history, what granularity gets kept. Ordinary schema
+  evolution you can backfill is Tier 2; it is worth knowing which of the two you are doing
+- **Records in stores you don't own** — browser cookies and `localStorage`, mobile app local
+  state, edge caches, third-party systems, devices in the field
+- **Service and domain boundaries** — they become team boundaries, and a team's habits outlive
+  any deploy
 - **Published contracts** — external consumers you cannot coordinate
 - **Multi-tenancy model** — single to multi-tenant is one of the worst migrations there is, and
   it is usually decided by accident on day one
@@ -62,25 +193,162 @@ where design effort pays.
   every query, and is brutal to change
 - **Consistency and source-of-truth ownership** — who owns which fact, what is transactional and
   what is eventual. Not "do we use Kafka" — *where does truth live*
+- **Datastore choice**, where it decides what gets persisted and in what shape
+- **Buying something that holds your records**, because leaving means extracting data in a shape
+  the vendor chose
 
-**Tier 2 — expensive but bounded.** A rewrite, not a data migration. How far it spreads depends
-on how much you let it leak.
+**Tier X — nothing to recover from.** The information was never written, or was written and
+discarded. Not a harder tier 3: a different question, which the next-but-one section covers.
 
-- **Tech stack** — languages, frameworks, datastores, infrastructure
-- **Integration style** — sync RPC or async events, orchestration or choreography
-- **Deployment topology** — monolith, modular monolith, services, regions
-- **Build vs. buy vs. borrow** — often the largest lever here, and the least deliberated
+- **What granularity gets kept** — a date instead of a timestamp, a count instead of the rows
+- **When collection starts** — every day before it is permanently blank
+- **What you decline to record at all** — the field nobody asked for until the year it mattered
 
-**Tier 3 — cheap and local.**
+## Inside tier 3 — why the window isn't yours
 
-- **Layering and internal structure** — where business logic lives
-- **Error handling and retry patterns**
-- **Testing strategy**
-- **Module organization, naming conventions**
+Two mechanisms, and they are not the same conversation. Both have escape hatches, which is what
+separates them from tier X.
+
+**1. Records in a store you cannot rewrite.** Browser cookies, `localStorage`, app state on
+phones that don't update, edge caches, a third-party system you can append to but not correct.
+Nobody is withholding cooperation — there is simply no write path. You cannot run a migration,
+so you version the record, read both shapes, write the new one, and carry that reader **until
+you decide to stop**. You never finish; you choose an expiry.
+
+That makes the compatibility window a decision rather than a consequence, and it deserves a
+written trade like anything else:
+
+> **Chose** read-both, write-new, old reader dropped after 90 days
+> **For** Economy — the dual-read path stops being maintained and tested forever
+> **Accepting** Fidelity — anyone returning after 90 days is treated as new, and whatever the
+> record held is gone for them
+
+**The escape hatch is disposability.** If the cookie holds a UI preference, reset everyone and
+you have closed the window yourself — that is a demotion to Tier 2, bought with one bad day. If
+it holds a consent record, an experiment assignment you need for analytic continuity, or
+anything you cannot recreate, there is no reset. Same store, different tier, decided entirely by
+whether losing the contents costs you something.
+
+**2. Code you don't own must change.** Consumers you cannot reach, or teams whose tooling and
+review habits already assume the current shape. Here somebody *does* have to act, so the escape
+hatch is reaching them — versioning the contract, a deprecation window, an actual conversation.
+Expensive and slow, but available.
+
+## Tier X — the orthogonal one
+
+The other three tiers measure how hard it is to **undo a decision**. Tier X asks whether there is
+anything left to undo it **from**, and those come apart — which is why it needs asking separately
+rather than read off the ladder:
+
+> **If this turns out wrong, is there anything still in existence that could reconstruct the
+> answer?**
+
+Two examples show why no rung on the reach axis catches this.
+
+**The day key.** A service counts events per day. Each event arrives stamped with the exact
+moment it happened — `2026-09-02T23:40:00Z`. The service works out which Toronto calendar day
+that moment falls in, adds one to that day's running total, and saves a row that says
+`{ day: "2026-09-02", count: 47 }`. The original timestamp is not saved anywhere.
+
+The code doing this lives in one service — one unit, one version — so reverting the commit takes
+an afternoon, and from tomorrow every event keeps its full timestamp again. **The diff looks like
+tier 1.** It isn't: this is precisely the residue case above, because the commit decided what
+gets written down. Every row already saved still says only `day` and `count`, and those rows stay
+in storage past the deploy. **Tier 3.**
+
+Then the second, separate fact. When someone asks next year what time of day events arrive, or
+whether the day should have been cut at UTC midnight instead, or whether the clock change in
+March was handled correctly — every one of those answers was in the timestamp, and the timestamp
+was never written down. So this is not a tier 3 you can eventually grind through with a
+migration. **Tier 3, and tier X underneath it.**
+
+Two facts, not one: the rows persist *and* nothing can rebuild them. The ladder gives you the
+first. Only the destruction question gives you the second.
+
+**Not collecting yet.** "We'll add the visits table when the source ships" is a decision to write
+*no code at all*. Its reach is nil, so the ladder has nothing to say — and it permanently
+determines that no range reaching back before collection start can ever be correct. Here there
+is not even a commit to revert: starting collection tomorrow is free and changes nothing about
+yesterday.
+
+Both are tier X, and neither is legible as a reach. So ask the question of every decision
+regardless of where it sits on the ladder, and write the answer next to the tier: *tier 3, and
+tier X — no replay after 30 days* is a sentence that stops a review, where *tier 3* alone lets a
+reviewer assume a migration exists.
+
+The test is not whether a write happened. It is whether **anything that still exists can
+reconstruct the answer**, and that fails in two families.
+
+**Never written.**
+
+- **No records** — nothing was collected. Usually a decision about *when to start*, which arrives
+  disguised as a scheduling question.
+- **No field** — the rows exist but the answer isn't in them. Usually a decision about
+  *granularity*, which arrives disguised as a storage-efficiency question.
+
+**Written, but no longer usable for recovery.**
+
+- **Retention expired** — the raw events held the answer and the window closed. This is the
+  common one, and the one people are most surprised by.
+- **Overwritten** — a placeholder replaced the unknown. The row is still there and now says `0`,
+  which is worse than empty, because nothing distinguishes the guess from a real measurement.
+- **Irreversibly transformed** — hashed, truncated, redacted, or aggregated past the point of
+  return. The bytes exist and the answer doesn't.
+
+That second family has a consequence the ladder cannot express: **tier X is the only tier that
+can arrive later, with nobody doing anything.** A decision sitting safely at tier 3 today —
+*we can always replay the stream* — becomes tier X on the day retention expires. Which makes
+"we can rebuild it from the events" a claim with an expiry date, and the useful follow-up is
+always: *for how long?*
+
+## Why tier X can't be weighed
+
+Tiers 1 to 3 can be priced at the table. A week, a migration and a soak, a deprecation cycle
+across three teams — you can put a number on recovery *today*, and argue about whether the number
+is worth it.
+
+**Tier X has no such number.** Its cost is whatever question someone asks in two years that you
+cannot answer, and nobody in the room knows what that question is. So it does not get weighed
+badly — it gets weighed at zero, because there is nothing to put on the scale. That is the whole
+reason it needs a flag instead of a place on the ladder: a value you cannot price will lose every
+trade it is entered into.
+
+## Latent and active — when you pay
+
+What *is* knowable at the table is whether anything currently consumes the thing you are not
+recording. That does not change the permanence; it changes when the bill arrives.
+
+**Latent — nothing reads it.** You stopped collecting, or never started, and no code depends on
+it. Going back is free: start collecting tomorrow. The hole stays in history and you may
+genuinely never pay. This is the case people point at to argue tier X is overblown, and they are
+right about this case and wrong about the category — the cost is not zero, it is unpriced, and it
+arrives the day someone asks about last year.
+
+**Active — something expects it.** The record is missing and a consumer needs it now. You pay
+immediately, and all three exits are bad:
+
+- **Backfill a placeholder.** ⚠️ The trap, and the one that looks most like a fix. Writing `0`
+  where you mean *unknown* destroys the difference between "we measured nothing" and "we didn't
+  measure." That is a second tier X created by the repair for the first, and it is worse than the
+  original, because the absence is now invisible — nobody can tell afterwards which rows were
+  guesses.
+- **Make the consumer tolerate absence.** Honest. You carry the null-handling forever, and every
+  reader has to understand why it's there.
+- **Narrow the product.** Refuse to answer for the affected range, and say so where people read
+  the number.
+
+The second and third are the real options. A dashboard that shows an explanatory note instead of
+a fabricated `$0`, or that says "since collection began" rather than "since beginning," has taken
+the honest exit and paid for it in Ergonomics and scope. That is a trade worth writing down —
+where a silent placeholder is not a trade at all, because nobody will ever see what it cost.
+
+There is no escape hatch, no migration and no budget that reaches tier X. The only move is before
+the fact: record the input, keep the instant, write the field. Which is why it is the one tier
+whose entire treatment is preventive — and why it belongs beside the ladder rather than on it.
 
 ## The inversion
 
-**The decisions with the most discussion are mostly Tier 3, and the Tier 1 ones get made
+**The decisions with the most discussion are mostly Tier 1, and the Tier 3 ones get made
 silently.** Nobody holds a design review on the tenancy model or the permission shape. They get
 decided by whoever wrote the first migration, on a Tuesday, in twenty minutes. That is where the
 2am backfill comes from.
@@ -103,7 +371,7 @@ If your domain model *is* your ORM model, the framework choice has been welded t
 The ORM's conventions — how it names tables, picks primary keys, maps inheritance, expresses
 optional — are now shapes in your database with two years of rows in them. So swapping the ORM,
 a Tier 2 rewrite you should be able to afford, means reshaping tables under live data, which is
-a Tier 1 cost you can't. The reversible decision has been promoted into the irreversible tier
+a Tier 3 cost you can't. The reversible decision has been promoted into the irreversible tier
 without anyone deciding to promote it.
 
 That is the actual content of the layering argument. Not the principle usually called
@@ -113,7 +381,7 @@ what it needs from storage, and the framework implements that, rather than the f
 defining what the domain is.
 
 So the useful question is narrow: *can the domain types be expressed without the framework?* Yes, pick
-a convention and stop arguing. No, and you have promoted a Tier 2 decision into Tier 1.
+a convention and stop arguing. No, and you have promoted a Tier 2 decision into Tier 3.
 
 Two moves buy most of the protection, and neither requires a full mapping layer. **Hand-write
 the migrations**, so the schema is something you designed and the ORM maps to it rather than
@@ -126,26 +394,26 @@ remember into Enforceability.
 
 Three conditions, all required. The rest of this document calls them **the gate**:
 
-1. **Irreversible or expensive to undo** — Tier 1, sometimes Tier 2
+1. **Irreversible or expensive to undo** — Tier 3, sometimes Tier 2
 2. **More than one genuinely plausible option** — not one option and two strawmen. Doing
    nothing is always one of them, and is usually the one nobody wrote down
 3. **Actually contested**, or contested-by-default because nobody has examined it
 
-Everything else gets a convention, a default, or whoever is writing it. Deliberating Tier 3
+Everything else gets a convention, a default, or whoever is writing it. Deliberating Tier 1
 decisions is how design practice earns its reputation for ceremony.
 
 **The gate governs deliberation, not vocabulary.** Say the sentence anywhere — a review
 comment, a commit message, a corridor. *Chose the map here for Legibility, accepting Speed*
 costs eight words on a decision nobody will revisit, and saying it on cheap decisions is the
-only way the words are available on the Tuesday a Tier 1 decision arrives disguised as a small
-one. What the gate withholds from Tier 3 is the meeting, the written trade and the four tests
+only way the words are available on the Tuesday a Tier 3 decision arrives disguised as a small
+one. What the gate withholds from Tier 1 is the meeting, the written trade and the four tests
 — not the right to name what you traded.
 
 ## Reversibility does two jobs
 
 Most of the time reversibility is **measured, not chosen**. It decides whether a decision earns
 deliberation at all — the gate above — and it settles which way a trade should go once you are
-inside one (§4: spend the reversible value to buy the irreversible one). Used that way it is a
+inside one (§4: spend the low-tier value to buy the high-tier one). Used that way it is a
 property of an option, not something anybody bought, which is why "we can always change it
 later" sends a reviewer back here rather than into the vocabulary.
 
@@ -474,30 +742,63 @@ value but a wish.
 
 # 4. Is it the right trade?
 
-Naming the trade makes it visible. It does not make it right. Four tests do that.
+Naming the trade makes it visible. It does not make it right. Four tests do that, and each one is
+shown below on a sentence that passes the vocabulary and still fails the test.
 
-**Restate both halves as consequences.** The value names the axis, not the amount. "Buys
-Enforceability" justifies nothing. "The compiler catches the null-handling class that caused
-three incidents last quarter" is checkable, and so is "one more runtime in CI, one more thing in
-onboarding." Once both halves are consequences, people argue about size instead of taste.
+## Test 1 — Restate both halves as consequences
 
-**Check the reversibility asymmetry.** Spend the reversible value to buy the irreversible one,
-and treat the reverse as needing a much higher bar. Convergence is usually the cheapest thing you
-own — you can delete the odd package and standardise later. Fidelity in a schema is not. That is
-why adopting one new library for a real correctness gain reads as obviously fine, and why letting
-the ORM shape the schema reads as obviously not.
+A value names the axis, not the amount. *Buys Enforceability* justifies nothing, because nobody
+can tell whether it bought a lot of it or a little.
 
-**When both halves are irreversible**, the test has nothing to say — it assumes one side is
-cheap, and sometimes neither is. A schema against a published contract is the common case:
-nothing on the board is expendable. Three questions replace the one.
+> ✗ **Chose** an append-only event log **for** Re-derivability, **accepting** Economy.
+
+Both halves are correctly named and neither is checkable. A reviewer who thinks this is a bad
+idea has nothing to point at.
+
+> ✓ **Chose** an append-only event log
+> **For Re-derivability** — the timezone, the attribution rule and the bot filter stop being
+> frozen at write time and become parameters we can re-run over history
+> **Accepting Economy** — a collection endpoint and an aggregator to own: about three weeks, and
+> a second service on the on-call rotation
+
+Now the argument is *three weeks and an extra pager against being able to fix the attribution
+rule*, which two people can actually disagree about. **Once both halves are consequences, people
+argue about size instead of taste.**
+
+## Test 2 — Check the recovery asymmetry
+
+**Spend the low-tier value to buy the high-tier one.** The reverse needs a much higher bar,
+because you are paying with the thing you cannot get back.
+
+The quickest way to run this is to write the tier beside each half:
+
+> ✓ **Chose** `zod` over hand-written validators
+> **For Fidelity (tier 3)** — the schema stops accepting states the domain says are impossible
+> **Accepting Convergence (tier 1)** — a second validation library; deleting it later is an
+> afternoon
+
+Arrow points the right way: a package you can delete bought a shape that goes into every row.
+
+> ✗ **Chose** the ORM's generated schema
+> **For Ergonomics (tier 1)** — no migrations to hand-write
+> **Accepting Fidelity (tier 3)** — table shapes are whatever the ORM's inheritance mapping
+> produces
+
+Same sentence structure, arrow reversed, and the annotation is what makes it obvious. You bought
+a convenience you could have had for a week's work with the shape of two years of rows.
+
+**When both halves are tier 3**, this test has nothing to say — it assumes one side is cheap.
+A schema against a published contract is the usual case: you need a new field, and either the
+schema bends to match the API's JSON or the API bends to match the schema. Nothing on the board
+is expendable, so three questions replace the one.
 
 - **Can either half be made smaller, or later?** Version the contract so only one shape is
-  published at a time. Buy information with a spike before committing the schema. An
-  irreversible decision you can defer is not yet irreversible, and shrinking one side is
-  usually cheaper than choosing between two permanent things.
-- **Which failure surfaces sooner?** Constrain the side that fails loudly. A broken client
-  tells you within minutes; a wrongly applied write produces a row that looks fine for a year.
-  Between two permanent mistakes, take the one you will hear about.
+  published at a time. Buy information with a spike before committing the schema. A tier 3
+  decision you can defer is not yet tier 3, and shrinking one side is usually cheaper than
+  choosing between two permanent things.
+- **Which failure surfaces sooner?** Constrain the side that fails loudly. A broken client tells
+  you within minutes; a wrongly shaped write produces a row that looks fine for a year. Between
+  two permanent mistakes, take the one you will hear about.
 - **Which has more consumers you cannot reach?** Your schema has one consumer — your code. A
   published contract has every version you ever shipped. Keep flexible whichever one would need
   more people coordinated to change it.
@@ -505,16 +806,46 @@ nothing on the board is expendable. Three questions replace the one.
 If all three come out even, that is not a tie to be broken. It means the decision is not ready,
 and the next move is to go and find something out rather than to pick.
 
-**Ask whether the loss is bounded or compounding.** One package inside one module is bounded, and
-the exit is cheap. A new *language* compounds — it pulls in tooling, CI, hiring, and on-call
-knowledge, and it re-prices every similar decision after it. Test: does accepting this once make
-the next one easier or harder?
+## Test 3 — Bounded, or compounding?
 
-**Name who pays.** Convergence, Legibility and Ergonomics are all paid by people who are not in
-the room — the next service's author, whoever is on call, the new hire in week two. Those are
-literally the personas. When the chooser also pays, the bar is low. When someone absent pays, ask
-them. This is also what makes "I just don't like Kafka" suspicious: the person deciding bears
-none of the cost.
+> **Does accepting this once make the next one easier or harder?**
+
+Bounded losses you can pay repeatedly. Compounding ones re-price every similar decision after
+them, which is why they deserve a different bar even when the immediate cost looks identical.
+
+> **Bounded** — "one date library, in one module." If it goes unmaintained, one module changes.
+> Accept it, and the next such decision is exactly as free as this one was.
+
+> **Compounding** — "just this one service in Kotlin." The immediate cost reads the same: one
+> unit, one team, revert-able. But it arrives with a build toolchain, a CI lane, a second set of
+> libraries to patch, an on-call rotation that now needs two languages, and a hiring
+> conversation. And having said yes once, the argument against the third language is weaker than
+> the argument against the second was.
+
+Both are tier 1 by reach. The tier is not the whole answer, which is exactly why this is a
+separate test.
+
+## Test 4 — Name who pays
+
+Convergence, Legibility, Ergonomics and Operability are all paid by people who are not in the
+room. Those are literally their personas: the next service's author, the new hire in week two,
+the developer on another team, whoever is on call.
+
+> ✗ **Chose** the generated API client **for** Ergonomics, **accepting** Legibility.
+
+Everyone in the review gets the Ergonomics. Nobody in the review pays the Legibility — it lands
+on someone who joins in March and cannot work out what the generated code does at startup.
+
+**When the chooser also pays, the bar is low. When someone absent pays, go and ask them**, or at
+minimum write down who they are:
+
+> ✓ **Accepting Legibility** — paid by the next person onboarding onto this service, who will
+> read generated code instead of a call. Checked with two people who joined this quarter: both
+> said the generated client was the confusing part of week one.
+
+This is also what makes *"I just don't like Kafka"* suspicious. It is not that the objection is
+wrong — it is that the person raising it bears none of the cost of the alternative, so nothing
+in the sentence can be weighed.
 
 ## The full form
 
@@ -548,11 +879,16 @@ The last line is the interesting one. The default version of this trade destroys
 Re-derivability; this team paid extra not to. Without the vocabulary that move is invisible,
 and someone repeats the cheap version next quarter.
 
-For a Tier 1 decision, add the deletion test's answer in concrete form, because that is what
-tells a reviewer how hard to push:
+Close any decision above tier 1 with an **If wrong** line: the recovery tier, then the deletion
+test's answer in concrete form. That is what tells a reviewer how hard to push, and it is worth
+writing on the cheap decisions too — a bare *tier 1* waves things through, and tier X lives
+mostly among the cheap ones.
 
-> **If wrong** — a table with two years of rows and three readers. No backfill; the instants were
-> never recorded.
+> **If wrong** — tier 3, and tier X underneath it: a table with two years of rows and three
+> readers we don't own. No backfill either; the instants were never recorded.
+
+Naming both is the point. The tier says how far you would have to reach; the tier X clause says
+that reaching won't help.
 
 ## A weak because-clause, repaired
 
@@ -590,7 +926,7 @@ Defaults, not rules. They tell you which two values to reach for first.
 | Tech stack | Convergence, Operability | Optionality |
 | Build vs. buy vs. borrow | Economy, Isolation | Optionality, Operability |
 | Retention and logging | Data Minimization | Re-derivability, Operability |
-| Tier 3 — layering, patterns, naming | Legibility, Convergence | — |
+| Tier 1 — layering, patterns, naming | Legibility, Convergence | — |
 
 Two of these are worth stating explicitly, because they are where teams most often optimise the
 wrong half:
@@ -603,7 +939,7 @@ payment-method column on a customer, at a scale you cannot migrate out of. Conve
 how the framework does auth" is how a permission shape gets chosen by a library that never met
 your customers.
 
-**Tier 3 decisions do not get this treatment.** Ask which one this team will read correctly,
+**Tier 1 decisions do not get this treatment.** Ask which one this team will read correctly,
 default to what you already do, and move on.
 
 ---
@@ -645,34 +981,65 @@ rarely written down, so you recover the values you used, bounded by your past im
 
 # Red flags
 
-| Flag | What it means |
-|---|---|
-| A because-clause with only one half | Nothing was traded, so nothing was decided |
-| "It's cleaner" | Legibility or Convergence, unnamed. Ask which |
-| "We can always change it later" | The gate, not a reason. Run the deletion test |
-| Latency or compliance argued as a trade-off | A threshold treated as a value |
-| A threshold with no owner, no date, and no demonstration | A found line nobody has shown, or a preference. Ask for the napkin |
-| Only one approach was ever considered | There was no decision to explain |
-| A trade written out for a layering or naming choice | Ceremony on a Tier 3 decision |
-| Nobody can say why the tenancy or permission shape is what it is | A Tier 1 decision made silently by the first migration |
-| Convergence bought a Tier 1 asset | You optimised the reversible layer and guessed at the irreversible one |
-| The accepting half is always the same value | Either a real org priority, or a blind spot. Worth knowing which |
+Things you can catch in a review without re-reading this document. The left column is what
+actually reaches you — a sentence someone says, or a shape a document has. The right column is
+the move, because a flag that stops at a diagnosis just leaves you knowing something is wrong.
+
+| What you hear or see | What it means | What to do |
+|---|---|---|
+| *"Chose Postgres because it's more robust."* | A because-clause with one half. Nothing was traded, so nothing was decided | Ask what it cost. If the answer is "nothing", there was no decision |
+| *"The new structure is cleaner."* | Legibility or Convergence, unnamed — and they pull in different directions | Ask which. "Easier to understand" and "same as everywhere else" are not the same claim |
+| *"We can always change it later."* | A claim about recovery, so it belongs in the tier, not the because-clause | Run the deletion test. What survives your deploy — rows, clients, nothing? |
+| *"We need to weigh p99 against developer experience."* | A threshold argued as a value. Above the bar, more buys nothing | Filter it: met or not met. Then trade what's left |
+| *"The security policy says so."* / *"That won't scale."* | A line with no owner, no date, and no demonstration | For a drawn line, ask who owns it and when it was last true. For a found one, ask for the napkin |
+| A design doc with one option and no alternatives section | There was no decision to explain, only a plan to ratify | Name the do-nothing option out loud. If nobody can, say so in the doc |
+| A full *for / accepting* block on where a helper function lives | Ceremony on a tier 1 decision — the deliberation costs more than being wrong would | Pick what this team reads correctly and move on |
+| *"Why is `org_id` on every table?"* → nobody knows | A tier 3 decision made silently by whoever wrote the first migration | Reconstruct it now, while the row count is still small enough to change |
+| *"If wrong — tier 1."* and nothing else | The reach was answered; the destruction question wasn't asked | Also ask: does this discard anything? And check the residue — if the commit changed what gets written, it was never tier 1 |
+| *"That's low risk, we've done this before."* | Confidence is a probability claim. The tier already assumes you were wrong | Re-ask it as: *if* this is wrong, what does recovery cost? |
+| *"We'll just use the framework's user model."* | Convergence chose a tier 3 asset. A library picked the shape that goes into every row | Split the question: is the library good, and separately, does its shape fit our domain? |
+| *"We'll just default the missing ones to zero."* | A tier X repair that creates a second tier X — `0` and *unknown* stop being distinguishable | Carry the null, or narrow what you promise. Never write a guess into a permanent record |
+| *"We can always replay the events."* | A tier 3 claim with an expiry date attached to it | Ask what the retention window is. Past it this is tier X, and it arrives with nobody doing anything |
 
 ---
 
 # Compressed
 
-- Sort by cost of being wrong. Score it with the deletion test — ask it differently for what
-  you record and for what you compute.
-- What you record accumulates and cannot be un-collected. What you compute re-runs. Never store
-  a computed result as your only copy of its input.
-- Tier 1 is irreversible — data model, boundaries, contracts, tenancy, authorization,
-  consistency. That is where the effort belongs.
-- The loudest debates are Tier 3 and reversible. Convention, not deliberation.
+- Sort by **recovery tier**, not by effort. Numbers go up as recovery gets harder — the opposite
+  of Sev-1. One axis for 1–3: **how long does the thing I am replacing outlive my deploy?**
+- **Tier 1**, not at all — one unit, a revert puts it back. **Tier 2**, until you close the
+  migration window — a contract, so two versions coexist. **Tier 3**, past your deploy and past
+  your reach — rows you can't rewrite, clients you can't call.
+- A contract is any interface whose two sides can be at different versions at once. Touching one
+  is at least tier 2, whoever owns the other side.
+- A migration you can backfill and phase out is tier 2, however long it takes — with a tail into
+  tier X, because a botched backfill destroys what you were reading from.
+- Tier 3 is where the effort belongs — identity, history, boundaries, contracts, tenancy,
+  authorization, consistency, and anything held in a store you can't rewrite. Two mechanisms:
+  records you can't reach (expire them, if they're disposable) and code you don't own (reach them).
+- **Tier X is off the axis**: not "hard to undo" but "nothing left to recover from." Ask it
+  separately of every decision — *could anything that still exists reconstruct this?* Never
+  written, or written and no longer usable. It stacks onto a tier rather than ranking above one.
+- Tier X can arrive **later, with nobody doing anything** — retention expiry turns tier 3 into
+  tier X on a schedule. "We can replay the stream" has an expiry date; ask what it is.
+- A code change is tier 1 only if reverting it leaves **no residue in storage**. Once the commit
+  decides what gets written down, the rows set the tier, not the diff.
+- Tier X can't be priced at the table, so it gets weighed at zero. What you *can* check is what
+  the fix costs whoever reads the records:
+  - **Nothing** — the consumer already copes with records that lack the field. Start recording
+    and move on.
+  - **Real work** — the fix leaves two populations, before and after, and every consumer has to
+    handle both from then on.
+- The placeholder backfill is not a repair. `0` where you mean *unknown* is a second tier X, and
+  it hides the first. Carry the null, or narrow what you promise.
+- What you record accumulates and cannot be un-collected. What you compute re-runs. Never store a
+  computed result as your only copy of its input.
+- The loudest debates are tier 1. Convention, not deliberation. A huge port is still tier 1.
 - Say it in two halves: **chose X for A, accepting B.** Use the fourteen words, not synonyms.
 - Thresholds are not values. Filter them first — some are drawn and negotiable, some are found
   and not.
-- Spend the reversible value to buy the irreversible one. The reverse needs a much higher bar.
+- Spend the low-tier value to buy the high-tier one. The reverse needs a much higher bar — write
+  the tier beside each half and look at which way the arrow points.
 - Name who pays. If they are not in the room, ask them.
 - Read the records back once a year. That is what tells you what this organization values.
 
@@ -685,7 +1052,9 @@ Where these ideas come from, and where this document parts company with them.
 **One-way and two-way doors** (Jeff Bezos, Amazon shareholder letters). Decisions split into
 irreversible and reversible, with deliberation reserved for the first kind. The tiers here are
 that split with the middle case named — most software decisions are neither a one-way door nor
-free, and Tier 2 is where they live.
+free, and Tier 2 is where they live. The doors metaphor also asks about the decision; this
+document asks about the thing being replaced and how long it survives, which is a property you
+can check rather than a judgement you have to make.
 
 **Architecture as the decisions that are hard to change** (Martin Fowler, building on Ralph
 Johnson). The same axis, used to define what counts as architecture. This document borrows the
