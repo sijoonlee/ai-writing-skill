@@ -118,8 +118,7 @@ instead of replacing it. A fifth leaves room for the qualifications
 but not the color, which is the right trade: drop the vivid aside,
 keep the caveat that changes how a result should be read.
 
-Cutting also invents numbers. A crisp figure is short and sounds
-authoritative, so it's what a tight budget reaches for. Every
+It's tempting to invent numbers while cutting. Every
 number, name, and date has to be traceable to the source you're
 writing from — point at the line. Where the source is vague, stay
 vague: "about half" is honest, "47 percent" is fabrication.
